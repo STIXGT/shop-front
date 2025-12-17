@@ -7,7 +7,7 @@ export default defineConfig({
     proxy: {
       // Configuración del proxy inverso
       "/api": {
-        target: "http://localhost:8000", // Cambia esto por la URL de tu backend
+        target: "http://98.89.22.41:8000", // Cambia esto por la URL de tu backend
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""), // Descomenta si tu backend no espera el prefijo /api
       },
