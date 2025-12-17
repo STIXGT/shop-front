@@ -20,16 +20,19 @@ async function proxy({ request, params, url, fetch }) {
     // Eliminamos headers que pueden causar conflictos
     headers.delete("host");
     headers.delete("connection");
+    // Borramos content-length para que fetch lo recalcule correctamente al enviar el nuevo body
+    headers.delete("content-length");
 
     const options = {
       method: request.method,
       headers: headers,
-      duplex: "half", // Necesario para algunos entornos de Node
     };
 
     // Solo adjuntamos el body si no es GET ni HEAD
     if (request.method !== "GET" && request.method !== "HEAD") {
-      options.body = request.body;
+      // Leemos el body como ArrayBuffer para asegurar que se transfiere completo y sin errores de stream
+      const body = await request.arrayBuffer();
+      options.body = body;
     }
 
     const response = await fetch(targetUrl, options);
