@@ -1,46 +1,36 @@
-const BACKEND_URL = "http://98.89.22.41:8000";
+import { json } from "@sveltejs/kit";
 
-async function proxy({ request, params }) {
-  // 🛡️ Protección contra rutas vacías
-  if (!params.path) {
-    return new Response(JSON.stringify({ error: "Invalid API path" }), {
-      status: 400,
-    });
-  }
+export async function GET({ url }) {
+  const backendUrl =
+    process.env.BACKEND_URL +
+    url.pathname.replace("/api/proxy", "") +
+    url.search;
 
-  const path = params.path.join("/");
-  const url = `${BACKEND_URL}/${path}`;
+  const res = await fetch(backendUrl);
+  const data = await res.json();
 
-  const headers = {};
-  const method = request.method;
+  return json(data);
+}
 
-  // Solo enviar Content-Type si hay body
-  if (method !== "GET" && method !== "HEAD") {
-    headers["Content-Type"] = "application/json";
-  }
+export async function POST({ request, url }) {
+  const body = await request.text(); // 👈 IMPORTANTE para PHP
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body:
-      method !== "GET" && method !== "HEAD" ? await request.text() : undefined,
+  const backendUrl =
+    process.env.BACKEND_URL +
+    url.pathname.replace("/api/proxy", "") +
+    url.search;
+
+  const res = await fetch(backendUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": request.headers.get("content-type") || "application/json",
+    },
+    body,
   });
 
-  const contentType = res.headers.get("content-type") || "";
-  const data = contentType.includes("application/json")
-    ? await res.text()
-    : await res.text();
-
+  const data = await res.text(); // PHP a veces no devuelve JSON puro
   return new Response(data, {
     status: res.status,
-    headers: {
-      "Content-Type": contentType || "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
   });
 }
-console.log("➡️ Proxy:", method, url);
-
-export const GET = proxy;
-export const POST = proxy;
-export const PUT = proxy;
-export const DELETE = proxy;
