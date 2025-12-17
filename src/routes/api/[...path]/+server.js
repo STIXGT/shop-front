@@ -1,36 +1,48 @@
-import { json } from "@sveltejs/kit";
+import { error } from "@sveltejs/kit";
 
-export async function GET({ url }) {
-  const backendUrl =
-    process.env.BACKEND_URL +
-    url.pathname.replace("/api/proxy", "") +
-    url.search;
+const BACKEND_URL = "http://98.89.22.41:8000";
 
-  const res = await fetch(backendUrl);
-  const data = await res.json();
+/**
+ * Función genérica para hacer proxy de todas las peticiones
+ * @type {import('./$types').RequestHandler}
+ */
+async function proxy({ request, params, url, fetch }) {
+  // params.path captura todo lo que va después de /api/
+  // Ejemplo: /api/products -> path: "products"
+  const path = params.path;
+  const query = url.search;
+  const targetUrl = `${BACKEND_URL}/${path}${query}`;
 
-  return json(data);
+  try {
+    // Preparamos los headers para enviar al backend
+    const headers = new Headers(request.headers);
+
+    // Eliminamos headers que pueden causar conflictos
+    headers.delete("host");
+    headers.delete("connection");
+
+    const options = {
+      method: request.method,
+      headers: headers,
+      duplex: "half", // Necesario para algunos entornos de Node
+    };
+
+    // Solo adjuntamos el body si no es GET ni HEAD
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      options.body = request.body;
+    }
+
+    const response = await fetch(targetUrl, options);
+
+    return response;
+  } catch (err) {
+    console.error("Error en Proxy:", err);
+    throw error(502, "No se pudo conectar con el servidor Backend");
+  }
 }
 
-export async function POST({ request, url }) {
-  const body = await request.text(); // 👈 IMPORTANTE para PHP
-
-  const backendUrl =
-    process.env.BACKEND_URL +
-    url.pathname.replace("/api/proxy", "") +
-    url.search;
-
-  const res = await fetch(backendUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": request.headers.get("content-type") || "application/json",
-    },
-    body,
-  });
-
-  const data = await res.text(); // PHP a veces no devuelve JSON puro
-  return new Response(data, {
-    status: res.status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+export const GET = proxy;
+export const POST = proxy;
+export const PUT = proxy;
+export const DELETE = proxy;
+export const PATCH = proxy;
