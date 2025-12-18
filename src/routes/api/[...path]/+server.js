@@ -29,24 +29,24 @@ async function proxy({ request, params, url, fetch, getClientAddress }) {
   const targetUrl = new URL(`${backendBase}/${path}`);
   targetUrl.search = url.search;
 
+  // Evita redirects de FastAPI por slash final (ej: /products -> /products/)
+  // que en serverless pueden romper POST/PUT/PATCH.
+  if (
+    !targetUrl.pathname.endsWith("/") &&
+    !targetUrl.pathname.split("/").pop()?.includes(".")
+  ) {
+    targetUrl.pathname = `${targetUrl.pathname}/`;
+  }
+
   try {
-    const headers = new Headers(request.headers);
-
-    // Quitar headers hop-by-hop o conflictivos
-    headers.delete("host");
-    headers.delete("connection");
-    headers.delete("content-length");
-    headers.delete("accept-encoding");
-    // Evita que el backend bloquee por CORS si validara Origin
-    headers.delete("origin");
-    headers.delete("referer");
-
-    // Info útil para backend/logs
-    headers.set("x-forwarded-host", url.host);
-    headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
-    if (typeof getClientAddress === "function") {
-      headers.set("x-forwarded-for", getClientAddress());
-    }
+    // Mantenerlo simple: enviar solo lo necesario al backend
+    // (evita efectos secundarios con x-forwarded-* y CORS).
+    const headers = new Headers();
+    const contentType = request.headers.get("content-type");
+    if (contentType) headers.set("content-type", contentType);
+    headers.set("accept", "application/json");
+    const authorization = request.headers.get("authorization");
+    if (authorization) headers.set("authorization", authorization);
 
     /** @type {RequestInit} */
     const init = {
@@ -55,8 +55,8 @@ async function proxy({ request, params, url, fetch, getClientAddress }) {
     };
 
     if (request.method !== "GET" && request.method !== "HEAD") {
-      // Bufferiza para que el runtime reenvíe el body correctamente.
-      init.body = await request.arrayBuffer();
+      // Enviar como texto es suficiente para JSON y evita problemas de stream.
+      init.body = await request.text();
     }
 
     const res = await fetch(targetUrl, init);
