@@ -1,6 +1,22 @@
 import { json } from "@sveltejs/kit";
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://98.89.22.41:8000";
+function normalizeBackendUrl(raw) {
+  // Si en Vercel configuraste BACKEND_URL sin puerto (ej: http://98.89.22.41)
+  // aquí forzamos :8000 para tu FastAPI.
+  try {
+    const u = new URL(raw);
+    if (!u.port) {
+      u.port = "8000";
+    }
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return String(raw).replace(/\/$/, "");
+  }
+}
+
+const BACKEND_URL = normalizeBackendUrl(
+  process.env.BACKEND_URL ?? "http://98.89.22.41:8000"
+);
 
 /**
  * Proxy genérico para reenviar /api/* hacia el backend.
@@ -46,10 +62,14 @@ async function proxy({ request, params, url, fetch, getClientAddress }) {
     const res = await fetch(targetUrl, init);
 
     // Re-emitimos la respuesta (sin tocar body) para soportar streams.
+    const outHeaders = new Headers(res.headers);
+    // Header de depuración: te dice a qué URL real se llamó.
+    outHeaders.set("x-proxy-target", targetUrl.toString());
+
     return new Response(res.body, {
       status: res.status,
       statusText: res.statusText,
-      headers: res.headers,
+      headers: outHeaders,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
