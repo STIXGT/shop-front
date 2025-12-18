@@ -15,7 +15,21 @@ export async function api(endpoint, options = {}) {
   });
 
   if (!res.ok) {
-    throw new Error(`API Error: ${res.status} ${res.statusText}`);
+    let detail = "";
+    try {
+      detail = await res.text();
+    } catch {
+      detail = "";
+    }
+
+    // Limitar detalle para no llenar el alert/console
+    const trimmed =
+      detail && detail.length > 500 ? `${detail.slice(0, 500)}...` : detail;
+    throw new Error(
+      `API Error: ${res.status} ${res.statusText}${
+        trimmed ? ` - ${trimmed}` : ""
+      }`
+    );
   }
 
   if (res.status === 204) return null;
